@@ -10,12 +10,55 @@
 using namespace std;
 using filesystem::path;
 
+static const regex QUOTATION_MARKS(R"/(\s*#\s*include\s*"([^"]*)"\s*)/");
+static const regex SANGLE_BRACKETS(R"/(\s*#\s*include\s*<([^>]*)>\s*)/");
+
 path operator""_p(const char* data, std::size_t sz) {
     return path(data, data + sz);
 }
 
-// напишите эту функцию
-bool Preprocess(const path& in_file, const path& out_file, const vector<path>& include_directories);
+bool Preprocess(const path& in_file, ofstream& output, const vector<path>& include_directories);
+
+bool CheckDirectories(const path& in_file, ofstream& output, const vector<path>& include_directories, const string& str_m, const int& num_of_cur_str) {
+    if (!any_of(include_directories.begin(), include_directories.end(), [&](path f_path) { return Preprocess(f_path / str_m, output, include_directories); })) {
+        cout << "unknown include file " << str_m << " at file " << in_file.string() << " at line " << num_of_cur_str << endl;
+        return false;
+    }
+    return true;
+}
+
+bool Preprocess(const path& in_file, ofstream& output, const vector<path>& include_directories) {
+    if (ifstream i_stream = ifstream(in_file)) {
+        string cur_str;
+        smatch m;
+        for(int num_of_cur_str = 1; getline(i_stream, cur_str); ++num_of_cur_str){
+            if (regex_match(cur_str, m, QUOTATION_MARKS)) {
+                if (!Preprocess(in_file.parent_path() / string(m[1]), output, include_directories) && !CheckDirectories(in_file, output, include_directories, string(m[1]), num_of_cur_str)) {
+                    return false;
+                }
+            }
+            else if (regex_match(cur_str, m, SANGLE_BRACKETS)){
+                if (!CheckDirectories(in_file, output, include_directories, string(m[1]), num_of_cur_str)) {
+                    return false;
+                }
+            }
+            else {
+                output << cur_str << endl;
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
+bool Preprocess(const path& in_file, const path& out_file, const vector<path>& include_directories) {
+    if (ifstream i_stream = ifstream(in_file)) {
+        ofstream o_stream = ofstream(out_file);
+        return Preprocess(in_file, o_stream, include_directories);
+    }
+    return false;
+    
+}
 
 string GetFileContents(string file) {
     ifstream stream(file);
